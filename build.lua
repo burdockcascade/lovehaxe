@@ -61,7 +61,7 @@ local function output_function(file, func)
         -- write return type
         if variant.returns then
             if #variant.returns > 1 then
-                file:write("): " .. capitalize(get_multi_return_class_name(func)) .. "Result;\n\n")
+                file:write("): " .. capitalize(get_multi_return_class_name(func)) .. ";\n\n")
             else
                 file:write("): " .. map_type(variant.returns[1].type) .. ";\n\n")
             end
@@ -83,7 +83,7 @@ local function output_multi_return_function(file, func)
             -- function name without "get"
             result_name = get_multi_return_class_name(func)
 
-            file:write("extern public class " .. capitalize(result_name) .. "Result {\n")
+            file:write("extern public class " .. capitalize(result_name) .. " {\n")
 
             for j, ret in ipairs(variant.returns) do
                 file:write("\tpublic var " .. ret.name .. ":" .. map_type(ret.type) .. ";\n")
