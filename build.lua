@@ -49,7 +49,7 @@ local function output_function(file, func)
         -- write arguments
         if variant.arguments then
             for j, arg in ipairs(variant.arguments) do
-                file:write(arg.name .. ":" .. map_type(arg.type) .. (arg.default and " = " .. map_type(arg.default) or "") .. "")
+                file:write(arg.name .. ":" .. map_type(arg.type) .. (arg.default and " = " .. arg.default or "") .. "")
 
                 -- write comma if not last argument
                 if j < #variant.arguments then
@@ -96,30 +96,6 @@ local function output_multi_return_function(file, func)
     end
 end
 
-local function output_class(file, class)
-    -- write class
-    file:write(("@:native(\"love.%s\")\n"):format(class.name))
-    file:write("extern class " .. capitalize(class.name) .. " {\n\n")
-
-    -- write functions
-    if class.functions then
-        for j, func in ipairs(class.functions) do
-            output_function(file, func)
-        end
-    end
-
-    -- write end of class
-    file:write("}\n\n")
-
-    -- write multi-return classes
-    if class.functions then
-        for j, func in ipairs(class.functions) do
-            output_multi_return_function(file, func)
-        end
-    end
-
-end
-
 local function output_type(file, type)
     -- write class
     file:write("extern class " .. capitalize(type.name))
@@ -155,18 +131,16 @@ local function output_enum(file, enum)
     file:write("}\n\n")
 end
 
--- print welcome message with api version
-print("Compiling 'LOVE API' version: " .. api.version)
+local function output_module(name, module)
 
--- print modules from api
-for i, module in ipairs(api.modules) do
+    local mod_name = capitalize(name)
 
     -- create file for module
-    local file = io.open("output/" .. module.name .. ".hx", "w")
+    local file = io.open("output/" .. mod_name .. ".hx", "w")
 
     -- check if file was created
     if file == nil then
-        print("Error: Could not create file for module: " .. module.name)
+        print("Error: Could not create file for module: " .. mod_name)
         os.exit(1)
     end
 
@@ -176,7 +150,7 @@ for i, module in ipairs(api.modules) do
     file:write("// GENERATED ON " .. timestamp .. "\n\n")
 
     -- write package name to file
-    file:write("package love." .. module.name .. ";\n\n")
+    file:write("package love." .. name .. ";\n\n")
 
     -- write imports
     file:write("import haxe.extern.Rest;\n")
@@ -184,7 +158,25 @@ for i, module in ipairs(api.modules) do
     file:write("import lua.UserData;\n\n")
 
     -- write class
-    output_class(file, module)
+    file:write(("@:native(\"love.%s\")\n"):format(name))
+    file:write("extern class " .. capitalize(mod_name) .. " {\n\n")
+
+    -- write functions
+    if module.functions then
+        for j, func in ipairs(module.functions) do
+            output_function(file, func)
+        end
+    end
+
+    -- write end of class
+    file:write("}\n\n")
+
+    -- write multi-return classes
+    if module.functions then
+        for j, func in ipairs(module.functions) do
+            output_multi_return_function(file, func)
+        end
+    end
 
     -- write types if types exist
     if module.types then
@@ -203,6 +195,16 @@ for i, module in ipairs(api.modules) do
     -- close file
     file:close()
 
-    print("Compiled module: " .. module.name)
+    print("Compiled module: " .. mod_name)
+end
 
+-- print welcome message with api version
+print("Compiling 'LOVE API' version: " .. api.version)
+
+-- top level module
+output_module("Love", api)
+
+-- print modules from api
+for i, module in ipairs(api.modules) do
+    output_module(module.name, module)
 end
