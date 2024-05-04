@@ -8,13 +8,3 @@ jobs:
         steps:
         - name: Checkout code
           uses: actions/checkout@v4
-          with:
-            submodules: recursive
-        - name: Update submodules
-          run: git submodule update --init --recursive
-        - name: Setup Lua
-          uses: leafo/gh-actions-lua@v10  
-          with:
-            luaVersion: luajit  
-        - name: Generate Haxe Library
-          run: lua build.lua

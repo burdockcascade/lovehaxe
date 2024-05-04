@@ -1,3 +1,0 @@
--p src
--m Main
---lua target/example.lua

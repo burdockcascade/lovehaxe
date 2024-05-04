@@ -73,6 +73,9 @@ end
 
 local function output_multi_return_function(file, func)
 
+    -- track return type
+    local tracker = {}
+
     -- every variant
     for i, variant in ipairs(func.variants) do
 
@@ -80,15 +83,25 @@ local function output_multi_return_function(file, func)
         if variant.returns and #variant.returns > 1 then
             
             -- function name without "get"
-            result_name = get_multi_return_class_name(func)
+            local result_name = get_multi_return_class_name(func)
 
-            file:write("extern class " .. capitalize(result_name) .. " {\n")
+            -- skip duplicate structs
+            if not tracker[result_name] then
 
-            for j, ret in ipairs(variant.returns) do
-                file:write("\tpublic var " .. ret.name .. ":" .. map_type(ret.type) .. ";\n")
+                -- debug
+                print("\tCreating struct: " .. result_name)
+
+                tracker[result_name] = true
+
+                file:write("extern class " .. capitalize(result_name) .. " {\n")
+
+                for j, ret in ipairs(variant.returns) do
+                    file:write("\tpublic var " .. ret.name .. ":" .. map_type(ret.type) .. ";\n")
+                end
+
+                file:write("}\n\n")
+            
             end
-
-            file:write("}\n\n")
         
         end
             
@@ -119,7 +132,7 @@ end
 
 local function output_enum(file, enum)
     -- write enum
-    file:write("enum " .. enum.name .. " {\n")
+    file:write("extern enum " .. enum.name .. " {\n")
 
     for j, value in ipairs(enum.constants) do
         -- write enum value
@@ -130,12 +143,41 @@ local function output_enum(file, enum)
     file:write("}\n\n")
 end
 
+local function output_class(file, class)
+    -- write class
+    file:write("extern class " .. capitalize(class.name))
+
+    -- write parent class
+    if class.supertypes then
+        file:write(" extends " .. capitalize(class.supertypes[1]))
+    end
+
+    file:write(" {\n\n")
+
+    -- write functions
+    if class.functions then
+        for j, func in ipairs(class.functions) do
+            output_function(file, func)
+        end
+    end
+
+    -- write end of class
+    file:write("}\n\n")
+
+    -- write multi-return classes
+    if class.functions then
+        for j, func in ipairs(class.functions) do
+            output_multi_return_function(file, func)
+        end
+    end
+end
+
 local function output_module(name, module)
 
     local mod_name = capitalize(name)
 
     -- create file for module
-    local file = io.open("src/love/" .. mod_name .. ".hx", "w")
+    local file = io.open("lib/love/" .. mod_name .. ".hx", "w")
 
     -- check if file was created
     if file == nil then
@@ -152,6 +194,7 @@ local function output_module(name, module)
     file:write("package love;\n\n")
 
     -- write imports
+    file:write("import love.Love.Object;\n")
     file:write("import lua.Table;\n")
 
     -- if not love then prefix with love
@@ -161,26 +204,9 @@ local function output_module(name, module)
         native_name = "love." .. name
     end
 
-    -- write class
+    -- write top-level class
     file:write(("@:native(\"%s\")\n"):format(native_name))
-    file:write("extern class " .. capitalize(mod_name) .. " {\n\n")
-
-    -- write functions
-    if module.functions then
-        for j, func in ipairs(module.functions) do
-            output_function(file, func)
-        end
-    end
-
-    -- write end of class
-    file:write("}\n\n")
-
-    -- write multi-return classes
-    if module.functions then
-        for j, func in ipairs(module.functions) do
-            output_multi_return_function(file, func)
-        end
-    end
+    output_class(file, module)
 
     -- write types if types exist
     if module.types then
@@ -206,6 +232,7 @@ end
 print("Compiling 'LOVE API' version: " .. api.version)
 
 -- top level module
+api.name = "Love"
 output_module("Love", api)
 
 -- print modules from api
