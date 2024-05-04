@@ -21,7 +21,7 @@ local function map_type(type)
         ["nil"] = "null"
     }
 
-    return type_map[type] or "Dynamic"
+    return type_map[type] or capitalize(type)
 end
 
 local function get_multi_return_class_name(func)
