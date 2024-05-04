@@ -1,0 +1,13 @@
+{
+    "name": "lovehx",
+    "url" : "https://github.com/burdockcase/lovehaxe/",
+    "license": "MIT",
+    "tags": ["cross", "useless"],
+    "description": "Bindings for the LOVE2D game engine in Haxe",
+    "version": "1.0.0",
+    "classPath": "src/love",
+    "releasenote": "Initial release, everything is working correctly.",
+    "contributors": ["burdockcase"],
+    "dependencies": {
+    }
+  }

@@ -4,23 +4,22 @@ local function capitalize(s)
 	return s:sub(1, 1):upper() .. s:sub(2)
 end
 
+local type_map = {
+    number = "Float",
+    string = "String",
+    boolean = "Bool",
+    table = "Table<Dynamic,Dynamic>",
+    ["light userdata"] = "UserData",
+    userdata = "UserData",
+    ["function"] = "Dynamic", -- FIXME
+    mixed = "Dynamic",
+    value = "Dynamic",
+    any = "Dynamic",
+    Variant = "Dynamic",
+    ["nil"] = "null"
+}
+
 local function map_type(type)
-
-    local type_map = {
-        number = "Float",
-        string = "String",
-        boolean = "Bool",
-        table = "Table<Dynamic,Dynamic>",
-        ["light userdata"] = "UserData",
-        userdata = "UserData",
-        ["function"] = "Dynamic", -- FIXME
-        mixed = "Dynamic",
-        value = "Dynamic",
-        any = "Dynamic",
-        Variant = "Dynamic",
-        ["nil"] = "null"
-    }
-
     return type_map[type] or capitalize(type)
 end
 
@@ -83,7 +82,7 @@ local function output_multi_return_function(file, func)
             -- function name without "get"
             result_name = get_multi_return_class_name(func)
 
-            file:write("extern public class " .. capitalize(result_name) .. " {\n")
+            file:write("extern class " .. capitalize(result_name) .. " {\n")
 
             for j, ret in ipairs(variant.returns) do
                 file:write("\tpublic var " .. ret.name .. ":" .. map_type(ret.type) .. ";\n")
@@ -120,11 +119,11 @@ end
 
 local function output_enum(file, enum)
     -- write enum
-    file:write("enum abstract " .. enum.name .. " {\n")
+    file:write("enum " .. enum.name .. " {\n")
 
     for j, value in ipairs(enum.constants) do
         -- write enum value
-        file:write("\tvar " .. capitalize(value.name) .. " = \"" .. value.name .. "\";\n")
+        file:write("\t" .. capitalize(value.name) .. ";\n")
     end
 
     -- write end of enum
@@ -136,7 +135,7 @@ local function output_module(name, module)
     local mod_name = capitalize(name)
 
     -- create file for module
-    local file = io.open("output/" .. mod_name .. ".hx", "w")
+    local file = io.open("src/love/" .. mod_name .. ".hx", "w")
 
     -- check if file was created
     if file == nil then
@@ -150,15 +149,20 @@ local function output_module(name, module)
     file:write("// GENERATED ON " .. timestamp .. "\n\n")
 
     -- write package name to file
-    file:write("package love." .. name .. ";\n\n")
+    file:write("package love;\n\n")
 
     -- write imports
-    file:write("import haxe.extern.Rest;\n")
     file:write("import lua.Table;\n")
-    file:write("import lua.UserData;\n\n")
+
+    -- if not love then prefix with love
+    if name == "Love" then
+        native_name = "love"
+    else
+        native_name = "love." .. name
+    end
 
     -- write class
-    file:write(("@:native(\"love.%s\")\n"):format(name))
+    file:write(("@:native(\"%s\")\n"):format(native_name))
     file:write("extern class " .. capitalize(mod_name) .. " {\n\n")
 
     -- write functions
