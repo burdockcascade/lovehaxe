@@ -2,7 +2,7 @@ package;
 
 import love.System;
 import love.Timer;
-import love.Window;
+import love.Math;
 
 class Main {
 
