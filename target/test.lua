@@ -548,7 +548,7 @@ end
 Main.new = {}
 Main.__name__ = true
 Main.main = function() 
-  love.System.getOS();
+  local pinfo = love.SystemModule.getPowerInfo();
 end
 
 Math.new = {}

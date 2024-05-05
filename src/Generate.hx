@@ -94,28 +94,49 @@ class Generator {
 
                 // write fields
                 for (field in hxClass.fields) {
-                    fout.writeString('\tpublic var ${field.name}:${field.type};\n');
+                    if (field.name == "...") {
+                        trace('Skipping field ${field.name} of type ${field.type} in class ${hxClass.name} in module ${module.name}.');
+                        fout.writeString('\t// Skipping field ${field.name} of type ${field.type}.\n');
+                        continue;
+                    } else {
+                        fout.writeString('\tpublic var ${field.name}:${field.type};\n');
+                    }
                 }
 
                 for (func in hxClass.functions) {
-                    fout.writeString('\tpublic static function ${func.name}(');
-                    for (i in 0...func.variants[0].args.length) {
 
-                        // write arg
-                        var arg: HxField = func.variants[0].args[i];
-                        fout.writeString('${arg.name}:${arg.type}');
+                    // each variant
+                    for (variant in func.variants) {
 
-                        // add default value if presetnt
-                        if (arg.defaultValue != null) {
-                            fout.writeString(' = ${arg.defaultValue}');
+                        fout.writeString('\tpublic static function ${func.name}(');
+                        for (i in 0...variant.args.length) {
+
+                            // write arg
+                            var arg: HxField = variant.args[i];
+
+                            // if vararg then add varname
+                            if (arg.name == "...") {
+                                arg.name = '...varargs';
+                            }
+
+                            fout.writeString('${arg.name}:${arg.type}');
+    
+                            // add default value if presetnt
+                            if (arg.defaultValue != null) {
+                                // fixme: default values can not be mapped
+                                // fout.writeString(' = ${arg.defaultValue}');
+                            }
+    
+                            // add comma if not last arg
+                            if (i < variant.args.length - 1) {
+                                fout.writeString(', ');
+                            }
                         }
-
-                        // add comma if not last arg
-                        if (i < func.variants[0].args.length - 1) {
-                            fout.writeString(', ');
-                        }
+                        fout.writeString('):${variant.returnType};\n');
+        
                     }
-                    fout.writeString('):${func.variants[0].returnType};\n');
+
+
                 }
                 fout.writeString('}\n\n');
             }
@@ -212,7 +233,7 @@ class Generator {
         hxModule.nativeName = 'love.${modName}';
 
         // write class
-        var hxClass = new HxClass(capitalizeFirstLetter(modName));
+        var hxClass = new HxClass(capitalizeFirstLetter(modName) + "Module");
         for (i in 0...functions.length) {
             var compiledFunction = compileFunction(functions[i]);
             hxClass.functions.push(compiledFunction.func);
@@ -359,6 +380,12 @@ class Generator {
     
 
     private static function mapType(type:String) : String {
+
+        // if ends with "or string" then return string
+        if (type.indexOf(' or string') != -1) {
+            return 'String';
+        }
+
         switch (type) {
             case "boolean":
                 return "Bool";
