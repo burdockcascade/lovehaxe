@@ -5,6 +5,10 @@ import haxe.Json;
 import sys.io.File;
 import sys.io.FileOutput;
 
+// todo
+// 1) fix keyboad enums
+// 2) fix vararg returns
+
 class Generate {
 
     private static var LOVE_API_URL = "https://love2d-community.github.io/love-api/love-api.json";
@@ -14,6 +18,11 @@ class Generate {
 
         http.onData = function(data:String) {
             try {
+
+                // write json to file
+                var fout = File.write('target/love-api.json');
+                fout.writeString(data);
+
                 new Generator(haxe.Json.parse(data));
             } catch (error:Dynamic) {
                 trace('Error parsing JSON data: $error');
@@ -84,13 +93,20 @@ class Generator {
             // write classes
             for (hxClass in module.classes) {
 
+                // write annotations
+                for (annotation in hxClass.annotations) {
+                    fout.writeString('@${annotation}\n');
+                }
+
                 // write class
                 fout.writeString('extern class ${hxClass.name} ');
+
+                // write parent class
                 if (hxClass.parent != null) {
-                    fout.writeString('extends ${hxClass.parent} {\n');
-                } else {
-                    fout.writeString('{\n');
+                    fout.writeString('extends ${hxClass.parent} ');
                 }
+
+                fout.writeString('{\n\n');
 
                 // write fields
                 for (field in hxClass.fields) {
@@ -106,9 +122,22 @@ class Generator {
                 for (func in hxClass.functions) {
 
                     // each variant
-                    for (variant in func.variants) {
+                    for (i in 0...func.variants.length) {
 
-                        fout.writeString('\tpublic static function ${func.name}(');
+                        var variant = func.variants[i];
+
+                        // check if last variant
+                        var is_overloaded_function = func.variants.length > 1 && i < func.variants.length - 1;
+
+                        // if last variant then add annotation
+                        if (is_overloaded_function) {
+                            fout.writeString('\t@:overload(function (');
+                        } else if (func.is_static) {
+                            fout.writeString('\tpublic static function ${func.name}(');
+                        } else {
+                            fout.writeString('\tfunction ${func.name}(');
+                        }
+
                         for (i in 0...variant.args.length) {
 
                             // write arg
@@ -132,9 +161,18 @@ class Generator {
                                 fout.writeString(', ');
                             }
                         }
-                        fout.writeString('):${variant.returnType};\n');
+                        
+                        fout.writeString('):${variant.returnType}');
+
+                        if (is_overloaded_function) {
+                            fout.writeString(' {})\n');
+                        } else {
+                            fout.writeString(';\n');
+                        }
         
                     }
+
+                    fout.writeString('\n');
 
 
                 }
@@ -169,6 +207,7 @@ class Generator {
             apiData.enums = new Array<Dynamic>();
         }
 
+        // compile root module
         modules.push(compileModule('Love2D', apiData.functions, apiData.types, apiData.enums));
 
         // modules
@@ -230,59 +269,55 @@ class Generator {
 
         hxModule.pkg = 'love';
         hxModule.imports.push('lua.Table');
+        hxModule.imports.push('lua.UserData');
         hxModule.nativeName = 'love.${modName}';
 
-        // write class
+        // convert love types to haxe classes
+        for (i in 0...types.length) {
+
+            var hxType = types[i];
+            var hxClass = new HxClass(capitalizeFirstLetter(hxType.name));
+            
+            if (hxType.supertypes != null) {
+                hxClass.parent = capitalizeFirstLetter(hxType.supertypes[0]);
+            }
+
+            // write functions
+            if (hxType.functions != null) {
+                for (i in 0...hxType.functions.length) {
+                    var compiledFunction = compileFunction(hxType.functions[i]);
+                    hxClass.functions.push(compiledFunction.func);
+                    for (i in 0...compiledFunction.returnClasses.length) {
+                        hxModule.classes.set(compiledFunction.returnClasses[i].name, compiledFunction.returnClasses[i]);
+                    }
+                }
+            }
+
+            hxModule.classes.set(hxClass.name, hxClass);
+
+        }
+
+        // convert love enums to haxe enums
+        for (i in 0...enums.length) {
+            var hxEnum = new HxEnum(enums[i].name);
+            if (enums[i].constants != null) {
+                for (j in 0...enums[i].constants.length) {
+                    hxEnum.values.push(enums[i].constants[j].name.toUpperCase());
+                }
+                hxModule.enums.set(hxEnum.name, hxEnum);
+            }
+        }
+        
+        // convert love module to haxe class
         var hxClass = new HxClass(capitalizeFirstLetter(modName) + "Module");
         for (i in 0...functions.length) {
-            var compiledFunction = compileFunction(functions[i]);
+            var compiledFunction = compileFunction(functions[i], true);
             hxClass.functions.push(compiledFunction.func);
             for (i in 0...compiledFunction.returnClasses.length) {
                 hxModule.classes.set(compiledFunction.returnClasses[i].name, compiledFunction.returnClasses[i]);
             }
         }
         hxModule.classes.set(hxClass.name, hxClass);
-
-        // write types
-        if (types != null) {
-
-            for (i in 0...types.length) {
-
-                var hxType = types[i];
-                var hxClass = new HxClass(capitalizeFirstLetter(hxType.name));
-                
-                if (hxType.supertypes != null) {
-                    hxClass.parent = capitalizeFirstLetter(hxType.supertypes[0]);
-                }
-    
-                // write functions
-                if (hxType.functions != null) {
-                    for (i in 0...hxType.functions.length) {
-                        var compiledFunction = compileFunction(hxType.functions[i]);
-                        hxClass.functions.push(compiledFunction.func);
-                        for (i in 0...compiledFunction.returnClasses.length) {
-                            hxModule.classes.set(compiledFunction.returnClasses[i].name, compiledFunction.returnClasses[i]);
-                        }
-                    }
-                }
-    
-                hxModule.classes.set(hxClass.name, hxClass);
-    
-            }
-        }
-
-        // write enums
-        if (enums != null) {
-            for (i in 0...enums.length) {
-                var hxEnum = new HxEnum(enums[i].name);
-                if (enums[i].constants != null) {
-                    for (j in 0...enums[i].constants.length) {
-                        hxEnum.values.push(enums[i].constants[j].name.toUpperCase());
-                    }
-                    hxModule.enums.set(hxEnum.name, hxEnum);
-                }
-            }
-        }
 
         // remember where classes are kept
         for (hxClassName in hxModule.classes.keys()) {
@@ -293,9 +328,10 @@ class Generator {
 
     }
 
-    private function compileFunction(func:Dynamic) : CompiledFunction {
+    private function compileFunction(func:Dynamic, is_static: Bool = false) : CompiledFunction {
 
         var hxFunction = new HxFunction(func.name);
+        hxFunction.is_static = is_static;
         var variants: Array<Dynamic> = func.variants;
        
         var returnClasses = new Array<HxClass>();
@@ -341,6 +377,8 @@ class Generator {
                     
                     // create a struct for the return type
                     var hxClass = new HxClass(getFunctionStructName(func.name));
+                    hxClass.annotations.push(':multiReturn');
+
                     for (i in 0...variant.returns.length) {
                         var variantReturn = variant.returns[i];
                         hxClass.fields.push(new HxField(variantReturn.name, mapType(variantReturn.type)));
@@ -397,6 +435,16 @@ class Generator {
                 return "Table<Dynamic,Dynamic>";
             case "nil":
                 return "Null";
+            case "Variant":
+                return "Dynamic";
+            case "any":
+                return "Dynamic";
+            case "function":    
+                return "Dynamic";
+            case "cdata":
+                return "Dynamic";
+            case "light userdata":
+                return "UserData";
             default:
                 return capitalizeFirstLetter(type);
         }
@@ -431,11 +479,13 @@ class HxClass {
     public var parent: String;
     public var fields: Array<HxField>;
     public var functions: Array<HxFunction>;
+    public var annotations: Array<String>;
 
     public function new(name: String) {
         this.name = name;
         fields = new Array<HxField>();
         functions = new Array<HxFunction>();
+        annotations = new Array<String>();
     }
 }
 
@@ -463,9 +513,11 @@ class HxField {
 class HxFunction {
     public var name: String;
     public var variants: Array<HxVariant>;
+    public var is_static: Bool;
 
     public function new(name: String) {
         this.name = name;
+        is_static = false;
         variants = new Array<HxVariant>();
     }
 }
