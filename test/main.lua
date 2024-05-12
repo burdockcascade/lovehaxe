@@ -548,7 +548,8 @@ end
 Main.new = {}
 Main.__name__ = true
 Main.main = function() 
-  local pinfo = love.SystemModule.getPowerInfo();
+  local t = love.Thread.new();
+  t:start(1, 2, 3, 4);
 end
 
 Math.new = {}

@@ -44,7 +44,6 @@ class Generate {
             var fout = File.write(LOVE_API_JSON);
             fout.writeString(data);
 
-
             try {
                 new Generator(haxe.Json.parse(data));
             } catch (error:Dynamic) {
@@ -311,6 +310,13 @@ class Generator {
 
             var hxType = types[i];
             var hxClass = new HxClass(capitalizeFirstLetter(hxType.name));
+
+            // insert empty constructor
+            var hxVariant = new HxVariant();
+            hxVariant.returnType = 'Void';
+            var hxFunction = new HxFunction('new');
+            hxFunction.variants.push(hxVariant);
+            hxClass.functions.set("new", hxFunction);
             
             if (hxType.supertypes != null) {
                 hxClass.parent = capitalizeFirstLetter(hxType.supertypes[0]);
@@ -320,7 +326,7 @@ class Generator {
             if (hxType.functions != null) {
                 for (i in 0...hxType.functions.length) {
                     var compiledFunction = compileFunction(hxClass.name, hxType.functions[i]);
-                    hxClass.functions.push(compiledFunction.func);
+                    hxClass.functions.set(compiledFunction.func.name, compiledFunction.func);
                     for (i in 0...compiledFunction.returnClasses.length) {
                         hxModule.classes.set(compiledFunction.returnClasses[i].name, compiledFunction.returnClasses[i]);
                     }
@@ -353,9 +359,10 @@ class Generator {
         // set love namespace
         hxClass.annotations.push(':native("love.${hxModule.native_name}")');
 
+        // write functions
         for (i in 0...functions.length) {
             var compiledFunction = compileFunction(capitalized_module_name, functions[i], true);
-            hxClass.functions.push(compiledFunction.func);
+            hxClass.functions.set(compiledFunction.func.name, compiledFunction.func);
             for (i in 0...compiledFunction.returnClasses.length) {
                 hxModule.classes.set(compiledFunction.returnClasses[i].name, compiledFunction.returnClasses[i]);
             }
@@ -384,7 +391,7 @@ class Generator {
 
             var hxVariant = new HxVariant();
 
-            var variant: Dynamic  = variants[i];
+            var variant: Dynamic = variants[i];
             var variantReturns: Array<Dynamic> = variant.returns;
             var variantArgs: Array<Dynamic> = variant.arguments;
 
@@ -424,10 +431,18 @@ class Generator {
                     var hxClass = new HxClass(struct_name);
                     hxClass.annotations.push(':multiReturn');
 
-                    for (i in 0...variant.returns.length) {
-                        var variantReturn = variant.returns[i];
-                        hxClass.fields.push(new HxField(variantReturn.name, mapType(variantReturn.type)));
+                    for (i in 0...variantReturns.length) {
+                        var variantReturn = variantReturns[i];
+                        var field = new HxField(variantReturn.name, mapType(variantReturn.type));
+
+                        // check for duplicates (this only happens to FileSytem.Read)
+                        if (hxClass.fields.exists(field.name)) {
+                            field = new HxField(variantReturn.name, "Dynamic");
+                        }
+
+                        hxClass.fields.set(field.name, field);
                     }
+
                     returnClasses.push(hxClass);
 
                 }
@@ -522,14 +537,14 @@ class HxModule {
 class HxClass {
     public var name: String;
     public var parent: String;
-    public var fields: Array<HxField>;
-    public var functions: Array<HxFunction>;
+    public var fields: Map<String, HxField>;
+    public var functions: Map<String, HxFunction>;
     public var annotations: Array<String>;
 
     public function new(name: String) {
         this.name = name;
-        fields = new Array<HxField>();
-        functions = new Array<HxFunction>();
+        fields = new Map<String, HxField>();
+        functions = new Map<String, HxFunction>();
         annotations = new Array<String>();
     }
 }

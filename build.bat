@@ -5,4 +5,4 @@ del target\example.lua
 haxe -p src --main Generate --hl target\output.hl
 hl .\target\output.hl
 
-haxe -p lib --main Main --lua target\example.lua
+haxe -p lib --main Main --lua test\main.lua
