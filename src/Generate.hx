@@ -12,17 +12,40 @@ import sys.io.FileOutput;
 class Generate {
 
     private static var LOVE_API_URL = "https://love2d-community.github.io/love-api/love-api.json";
+    private static var LOVE_API_MD5 = "target/love-api.md5";
+    private static var LOVE_API_JSON = "target/love-api.json";
+
+    private static var GEN_OVERIDE:Bool = true;
 
     public static function main() {
         var http = new haxe.Http(LOVE_API_URL);
 
         http.onData = function(data:String) {
+
+            // hash downloaded json
+            var data_md5 = haxe.crypto.Md5.encode(data);
+
+            // if override is disabled
+            if (!GEN_OVERIDE) {
+                // read local md5
+                var fin = File.getContent(LOVE_API_MD5);
+
+                // if md5 is the same then skip
+                if (fin == data_md5) {
+                    trace('No changes in LOVE API. Skipping generation.');
+                    return;
+                }
+            }
+
+            var fout_md5 = File.write(LOVE_API_MD5);
+            fout_md5.writeString(data_md5);
+
+            // write json to file
+            var fout = File.write(LOVE_API_JSON);
+            fout.writeString(data);
+
+
             try {
-
-                // write json to file
-                var fout = File.write('target/love-api.json');
-                fout.writeString(data);
-
                 new Generator(haxe.Json.parse(data));
             } catch (error:Dynamic) {
                 trace('Error parsing JSON data: $error');
@@ -81,6 +104,11 @@ class Generator {
 
                 var dependency = module.dependencies[i];
                 var importSource = importSources.get(dependency);
+
+                // exclude self 
+                if (importSource == module.name) {
+                    continue;
+                }
 
                 if (importSource != null) {
                     fout.writeString('import love.${importSource}.${dependency};\n');
@@ -261,16 +289,22 @@ class Generator {
         return modules;
     }
 
-    private function compileModule(modName: String, functions: Array<Dynamic>, types: Array<Dynamic>, enums: Array<Dynamic>) : HxModule {
+    private function compileModule(module_name: String, functions: Array<Dynamic>, types: Array<Dynamic>, enums: Array<Dynamic>) : HxModule {
 
-        var hxModule = new HxModule(capitalizeFirstLetter(modName));
+        trace('Compiling module ${module_name}');
 
-        trace('Compiling module ${hxModule.name}');
+        var capitalized_module_name = capitalizeFirstLetter(module_name);
 
+        // if filesytem then use CamelCase
+        if (module_name == 'filesystem') {
+            capitalized_module_name = 'FileSystem';
+        }
+
+        var hxModule = new HxModule(capitalized_module_name);
         hxModule.pkg = 'love';
         hxModule.imports.push('lua.Table');
         hxModule.imports.push('lua.UserData');
-        hxModule.nativeName = 'love.${modName}';
+        hxModule.native_name = '${module_name}';
 
         // convert love types to haxe classes
         for (i in 0...types.length) {
@@ -285,7 +319,7 @@ class Generator {
             // write functions
             if (hxType.functions != null) {
                 for (i in 0...hxType.functions.length) {
-                    var compiledFunction = compileFunction(hxType.functions[i]);
+                    var compiledFunction = compileFunction(hxClass.name, hxType.functions[i]);
                     hxClass.functions.push(compiledFunction.func);
                     for (i in 0...compiledFunction.returnClasses.length) {
                         hxModule.classes.set(compiledFunction.returnClasses[i].name, compiledFunction.returnClasses[i]);
@@ -307,11 +341,20 @@ class Generator {
                 hxModule.enums.set(hxEnum.name, hxEnum);
             }
         }
+
+        // remember where enums are kept
+        for (hxEnumName in hxModule.enums.keys()) {
+            importSources.set(hxEnumName, hxModule.name);
+        }
         
         // convert love module to haxe class
-        var hxClass = new HxClass(capitalizeFirstLetter(modName) + "Module");
+        var hxClass = new HxClass(capitalized_module_name + "Module");
+
+        // set love namespace
+        hxClass.annotations.push(':native("love.${hxModule.native_name}")');
+
         for (i in 0...functions.length) {
-            var compiledFunction = compileFunction(functions[i], true);
+            var compiledFunction = compileFunction(capitalized_module_name, functions[i], true);
             hxClass.functions.push(compiledFunction.func);
             for (i in 0...compiledFunction.returnClasses.length) {
                 hxModule.classes.set(compiledFunction.returnClasses[i].name, compiledFunction.returnClasses[i]);
@@ -328,7 +371,7 @@ class Generator {
 
     }
 
-    private function compileFunction(func:Dynamic, is_static: Bool = false) : CompiledFunction {
+    private function compileFunction(class_name, func:Dynamic, is_static: Bool = false) : CompiledFunction {
 
         var hxFunction = new HxFunction(func.name);
         hxFunction.is_static = is_static;
@@ -372,11 +415,13 @@ class Generator {
                     hxVariant.returnType = mapType(variantReturns[0].type);
                 } else if (variantReturns.length > 1) {
                     
+                    var struct_name = getFunctionStructName(class_name, func.name);
+
                     // set return type to the struct name
-                    hxVariant.returnType = getFunctionStructName(func.name);
+                    hxVariant.returnType = struct_name;
                     
                     // create a struct for the return type
-                    var hxClass = new HxClass(getFunctionStructName(func.name));
+                    var hxClass = new HxClass(struct_name);
                     hxClass.annotations.push(':multiReturn');
 
                     for (i in 0...variant.returns.length) {
@@ -400,7 +445,7 @@ class Generator {
 
     }
 
-    private function getFunctionStructName(funcName:String) : String {
+    private function getFunctionStructName(class_name, funcName:String) : String {
 
         // remove get from function name
         if (funcName.indexOf('get') == 0) {
@@ -412,7 +457,7 @@ class Generator {
         // capitalise first letter
         funcName = capitalizeFirstLetter(funcName);
 
-        return funcName;
+        return class_name + funcName;
     }
 
     
@@ -420,8 +465,8 @@ class Generator {
     private static function mapType(type:String) : String {
 
         // if ends with "or string" then return string
-        if (type.indexOf(' or string') != -1) {
-            return 'String';
+        if (type.indexOf('or') != -1) {
+            return 'Dynamic';
         }
 
         switch (type) {
@@ -458,7 +503,7 @@ class Generator {
 
 class HxModule {
     public var name: String;
-    public var nativeName: String;
+    public var native_name: String;
     public var pkg: String;
     public var imports: Array<String>;
     public var classes: Map<String, HxClass>;
