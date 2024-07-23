@@ -3,8 +3,15 @@ name: CI
 on: push
 
 jobs:
-    build:
-        runs-on: ubuntu-latest
-        steps:
-        - name: Checkout code
-          uses: actions/checkout@v4
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    - uses: krdlab/setup-haxe@v1
+      with:
+        haxe-version: latest
+    - name: Compile Generator
+      run: haxe -p src --main Generate --hl target\output.hl
+    - name: Generate Bindings
+      run: hl target\output.hl

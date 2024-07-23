@@ -3,6 +3,9 @@ del target\example.lua
 
 @REM Compile the code
 haxe -p src --main Generate --hl target\output.hl
+
+@REM Run the code
 hl .\target\output.hl
 
-haxe -p lib --main Main --lua test\main.lua
+@REM Test the code
+haxe -p lib --main Main --lua test\main.lua -D lua-vanilla
