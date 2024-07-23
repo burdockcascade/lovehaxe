@@ -1,8 +1,9 @@
 name: Updater
 
 on:
-  schedule:
-    - cron: '0 0 * * *'
+  push:
+    branches:
+      - master
 
 jobs:
   build:
@@ -15,3 +16,7 @@ jobs:
         haxe-version: latest
     - name: Run Generator
       run: haxe lovehaxe.hxml
+    - name: Release Please
+      uses: googleapis/release-please-action@v4
+      with:
+        release-type: simple
