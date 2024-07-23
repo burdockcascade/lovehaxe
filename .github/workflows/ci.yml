@@ -11,7 +11,5 @@ jobs:
     - uses: krdlab/setup-haxe@v1
       with:
         haxe-version: latest
-    - name: Compile Generator
-      run: haxe -p src --main Generate --hl target\output.hl
-    - name: Generate Bindings
-      run: hl target\output.hl
+    - name: Run Generator
+      run: haxe lovehaxe.hxml
