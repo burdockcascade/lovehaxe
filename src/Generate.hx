@@ -2,8 +2,8 @@ package;
 
 import haxe.Http;
 import haxe.Json;
+import haxe.crypto.Md5;
 import sys.io.File;
-import sys.io.FileOutput;
 
 // todo
 // 1) fix keyboad enums
@@ -17,12 +17,12 @@ class Generate {
     private static var GEN_OVERIDE:Bool = true;
 
     public static function main() {
-        var http = new haxe.Http(LOVE_API_URL);
+        var http = new Http(LOVE_API_URL);
 
         http.onData = function(data:String) {
 
             // hash downloaded json
-            var data_md5 = haxe.crypto.Md5.encode(data);
+            var data_md5 = Md5.encode(data);
 
             // if override is disabled
             if (!GEN_OVERIDE) {
@@ -44,7 +44,7 @@ class Generate {
             fout.writeString(data);
 
             try {
-                new Generator(haxe.Json.parse(data));
+                new Generator(Json.parse(data));
             } catch (error:Dynamic) {
                 trace('Error parsing JSON data: $error');
             }
